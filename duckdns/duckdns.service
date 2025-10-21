@@ -1,0 +1,10 @@
+[Unit]
+Description=DuckDNS IP Addres Update
+After=network.target
+
+[Service]
+User=ubuntu
+ExecStart=/home/ubuntu/duckdns/urlscanner.duckdns.org.sh
+
+[Install]
+WantedBy=multi-user.target
