@@ -1,0 +1,149 @@
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Vendor URL Scanner</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 650px; margin: 50px auto; padding: 20px; background-color: #f4f7f9; color: #3>
+        h1 { color: #1a73e8; }
+        .container { background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #url-form { display: flex; gap: 10px; }
+        #url-input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        button { padding: 12px 20px; background-color: #1a73e8; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #1558b8; }
+        #result-summary { margin-top: 25px; padding: 20px; border-radius: 8px; font-weight: bold; text-align: center; font-size: 1.2em; }
+        #result-details { margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; }
+
+        .vendor-result { margin-bottom: 10px; padding: 12px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .vendor-result.has-details { cursor: pointer; }
+        .vendor-name { font-weight: bold; }
+        .vendor-status-badge { font-weight: 500; }
+
+        .status-clean { border-left: 5px solid #1e8e3e; background-color: #e6f4ea; }
+        .status-malicious { border-left: 5px solid #d93025; background-color: #fce8e6; }
+        .status-error, .status-pending { border-left: 5px solid #f9ab00; background-color: #fff0c7; }
+
+        .dropdown-icon { margin-left: 8px; transition: transform 0.2s; display: inline-block; }
+        .dropdown-icon.open { transform: rotate(180deg); }
+
+        .vendor-details-content { display: none; padding: 10px 15px; margin-top: -5px; margin-bottom: 10px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-top: none; bor>
+        .vendor-details-content p { margin: 8px 0; border-bottom: 1px solid #eee; padding-bottom: 8px; word-wrap: break-word; }
+        .vendor-details-content p:last-child { border-bottom: none; }
+        .vendor-details-content strong { color: #333; display: block; margin-bottom: 2px; }
+
+        .safe { background-color: #e6f4ea; color: #1e8e3e; }
+        .unsafe { background-color: #fce8e6; color: #d93025; }
+        .warning { background-color: #fff0c7; color: #e8710a; }
+        .error { background-color: #fce8e6; color: #d93025; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Multi-Vendor URL Scanner</h1>
+        <p>Periksa reputasi URL menggunakan berbagai sumber keamanan.</p>
+        <form id="url-form">
+            <input type="url" id="url-input" placeholder="https://example.com" required>
+            <button type="submit" id="submit-button">Cek URL</button>
+        </form>
+
+        <div id="result-container" style="display: none;">
+            <div id="result-summary"></div>
+            <div id="result-details"></div>
+        </div>
+    </div>
+
+    <script>
+        const urlForm = document.getElementById('url-form');
+        const urlInput = document.getElementById('url-input');
+        const resultContainer = document.getElementById('result-container');
+        const resultSummary = document.getElementById('result-summary');
+        const resultDetails = document.getElementById('result-details');
+        const submitButton = document.getElementById('submit-button');
+
+        urlForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const url = urlInput.value;
+
+            submitButton.disabled = true;
+            submitButton.textContent = 'Memeriksa...';
+            resultContainer.style.display = 'block';
+            resultSummary.className = 'warning';
+            resultSummary.textContent = 'Menghubungi semua vendor...';
+            resultDetails.innerHTML = '';
+
+            try {
+                const response = await fetch('/check-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultSummary.className = result.score > 0 ? 'unsafe' : 'safe';
+                    resultSummary.innerHTML = `Skor Ancaman: <strong>${result.score}/${result.total_vendors}</strong>`;
+
+                    resultDetails.innerHTML = '';
+                    result.details.forEach(vendor => {
+                        const hasDetails = Object.keys(vendor.details).length > 0;
+                        const itemContainer = document.createElement('div');
+
+                        const resultRow = document.createElement('div');
+                        resultRow.classList.add('vendor-result', `status-${vendor.status}`);
+
+                        let statusText = 'Aman';
+                        if (vendor.status === 'malicious') statusText = 'Berbahaya';
+                        if (vendor.status === 'error') statusText = 'Error';
+                        if (vendor.status === 'pending_analysis') statusText = 'Analisis Pending';
+
+                        let dropdownIconHTML = hasDetails ? '<span class="dropdown-icon">▼</span>' : '';
+
+                        resultRow.innerHTML = `
+                            <span class="vendor-name">${vendor.vendor}</span>
+                            <span class="vendor-status-badge">${statusText} ${dropdownIconHTML}</span>
+                        `;
+                        if(hasDetails) resultRow.classList.add('has-details');
+
+                        itemContainer.appendChild(resultRow);
+
+                        if (hasDetails) {
+                            const detailsContent = document.createElement('div');
+                            detailsContent.classList.add('vendor-details-content');
+
+                            let detailsHTML = '';
+                            for (const [key, value] of Object.entries(vendor.details)) {
+                                detailsHTML += `<p><strong>${key}:</strong> ${value}</p>`;
+                            }
+                            detailsContent.innerHTML = detailsHTML;
+                            itemContainer.appendChild(detailsContent);
+
+                            resultRow.addEventListener('click', () => {
+                                const icon = resultRow.querySelector('.dropdown-icon');
+                                const content = itemContainer.querySelector('.vendor-details-content');
+
+                                const isVisible = content.style.display === 'block';
+                                content.style.display = isVisible ? 'none' : 'block';
+                                if(icon) {
+                                    icon.classList.toggle('open', !isVisible);
+                                }
+                            });
+                        }
+                        resultDetails.appendChild(itemContainer);
+                    });
+
+                } else {
+                    resultSummary.className = 'error';
+                    resultSummary.textContent = `Error: ${result.error || 'Terjadi kesalahan pada server.'}`;
+                }
+            } catch (error) {
+                resultSummary.className = 'error';
+                resultSummary.textContent = 'Gagal terhubung ke server.';
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Cek URL';
+            }
+        });
+    </script>
+</body>
+</html>
